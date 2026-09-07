@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/agentic-cloudops/.venv/bin/python",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/agentic-cloudops/backend"
+  ]
+}

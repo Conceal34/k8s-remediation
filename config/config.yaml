@@ -1,0 +1,54 @@
+# ── Kubernetes Cluster ────────────────────────────────────────────────────────
+cluster:
+  kubeconfig_path: "~/.kube/config"
+  context: "kind-cloudops"                 # Kind cluster context name
+  namespace: "default"
+  polling_interval_seconds: 15             # FR-1.1: how often to poll metrics (15s saves CPU vs 10s)
+
+# ── Anomaly Detection ─────────────────────────────────────────────────────────
+anomaly_detection:
+  training_window_minutes: 60              # How many minutes of history to train on
+  anomaly_score_threshold: 0.65            # FR-2.2: flag samples above this score
+  severity_bands:                          # FR-2.3: severity label assignment
+    low:    [0.65, 0.75]
+    medium: [0.75, 0.85]
+    high:   [0.85, 1.00]
+
+# ── LLM Agent Pipeline ────────────────────────────────────────────────────────
+agents:
+  llm_provider: "gemini"                   # ✅ CONFIRMED: Google Gemini
+  model:
+    gemini: "gemini-3.6-flash"             # Gemini 3.6 Flash model
+  fallback_model: "gemini-3.6-flash"       # Ultimate fallback model
+  temperature: 0.2                         # Low temperature = more deterministic agent outputs
+  max_debate_rounds: 2                     # FR-3.4: hard cap on Remediation ⇄ Critic loop
+
+# ── Autonomy Policy Engine ────────────────────────────────────────────────────
+policy:
+  confidence_threshold: 0.80              # FR-4.1: minimum confidence to auto-execute
+  action_risk_tiers:                      # FR-3.7 / FR-4.4: risk mapping (configurable)
+    restart:          "low"
+    scale_up:         "low"
+    scale_down:       "low"
+    rollback:         "high"
+    escalate_no_op:   "high"
+
+# ── Remediation Whitelist ─────────────────────────────────────────────────────
+whitelist:
+  allowed_actions:
+    - restart
+    - scale_up
+    - scale_down
+    - rollback
+    - escalate_no_op
+
+# ── Database ──────────────────────────────────────────────────────────────────
+database:
+  url: "postgresql://cloudops:cloudops@localhost:5432/cloudops_db"
+
+# ── API Server ────────────────────────────────────────────────────────────────
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "http://localhost:5173"              # Vite dev server default port
