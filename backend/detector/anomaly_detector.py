@@ -27,6 +27,7 @@ METRIC_IDX = {"cpu": 0, "memory": 1, "restarts": 2, "error_rate": 3}
 class AnomalyDetector:
     def __init__(self):
         self.model: IsolationForest | None = None
+        self._trained_rows: int = 0
 
     # ── Training ──────────────────────────────────────────────────────────────
     def train(self) -> bool:
@@ -40,12 +41,15 @@ class AnomalyDetector:
         if X.shape[0] < 10:
             return False
 
+        # contamination=0.01 means model expects only ~1% of data to be anomalous.
+        # This prevents it from flagging normal baseline readings as anomalies.
         self.model = IsolationForest(
-            n_estimators=100,             # 100 trees is accurate enough; 200 doubles RAM for marginal gain
-            contamination=0.05,
+            n_estimators=100,
+            contamination=0.01,   # was 0.05 — caused ~5% of normal data to fire as anomalies
             random_state=42,
         )
         self.model.fit(X)
+        self._trained_rows = X.shape[0]
         print(f"[AnomalyDetector] ✓ Model trained on {X.shape[0]} feature vectors.")
         return True
 
@@ -56,6 +60,11 @@ class AnomalyDetector:
         context: recent MetricSample rows used to build the feature vector.
         """
         if self.model is None:
+            return None
+
+        # Require the model to have seen enough normal data before it starts firing.
+        # Without this guard, a model trained on only a few rows will misfire.
+        if self._trained_rows < 30:
             return None
 
         # Build feature vector for this service using its most recent context rows
@@ -72,9 +81,13 @@ class AnomalyDetector:
         if prediction != -1:
             return None
 
-        # Convert sklearn's score_samples output to [0, 1] (higher = more anomalous)
-        raw_score  = self.model.score_samples(X)[0]   # More negative = more anomalous
-        normalized = max(0.0, min(1.0, 1.0 - ((raw_score + 0.5) / 0.5)))
+        # sklearn's score_samples() returns negative values.
+        # Typical range for IsolationForest: roughly [-0.5, 0.5].
+        # More negative = more isolated = more anomalous.
+        # We map to [0, 1] where 1 = maximally anomalous.
+        raw_score  = self.model.score_samples(X)[0]
+        # Clamp raw_score to expected range then invert: -0.5 → 1.0, 0.0 → 0.5, 0.5 → 0.0
+        normalized = float(np.clip(1.0 - (raw_score + 0.5), 0.0, 1.0))
 
         if normalized < THRESHOLD:
             return None
