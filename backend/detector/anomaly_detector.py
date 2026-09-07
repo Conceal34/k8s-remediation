@@ -41,11 +41,9 @@ class AnomalyDetector:
         if X.shape[0] < 10:
             return False
 
-        # contamination=0.01 means model expects only ~1% of data to be anomalous.
-        # This prevents it from flagging normal baseline readings as anomalies.
         self.model = IsolationForest(
             n_estimators=100,
-            contamination=0.01,   # was 0.05 — caused ~5% of normal data to fire as anomalies
+            contamination=0.05,   # 5% boundary — controls decision_function threshold
             random_state=42,
         )
         self.model.fit(X)
@@ -57,17 +55,18 @@ class AnomalyDetector:
     def score_sample(self, sample: MetricSample, context: list[MetricSample]) -> tuple[float, str] | None:
         """
         FR-2.2: Score a new sample. Returns (score, severity) if anomalous, else None.
-        context: recent MetricSample rows used to build the feature vector.
+        Uses decision_function() which has a clean boundary at 0:
+          > 0 = normal,  < 0 = anomaly (magnitude = how anomalous).
+        This avoids the false-positive problem of predict() with contamination=0.05.
         """
         if self.model is None:
             return None
 
-        # Require the model to have seen enough normal data before it starts firing.
-        # Without this guard, a model trained on only a few rows will misfire.
+        # Don't score until the model has seen enough distinct samples.
         if self._trained_rows < 30:
             return None
 
-        # Build feature vector for this service using its most recent context rows
+        # Build feature vector for this service
         vec = [0.0, 0.0, 0.0, 0.0]
         for s in context:
             if s.service == sample.service:
@@ -76,18 +75,17 @@ class AnomalyDetector:
                     vec[idx] = float(s.value)
 
         X = np.array([vec])
-        prediction = self.model.predict(X)[0]       # -1 = anomaly, 1 = normal
 
-        if prediction != -1:
+        # decision_function > 0  → normal (return immediately)
+        # decision_function < 0  → anomaly candidate (magnitude = severity)
+        df = float(self.model.decision_function(X)[0])
+        if df >= 0:
             return None
 
-        # sklearn's score_samples() returns negative values.
-        # Typical range for IsolationForest: roughly [-0.5, 0.5].
-        # More negative = more isolated = more anomalous.
-        # We map to [0, 1] where 1 = maximally anomalous.
-        raw_score  = self.model.score_samples(X)[0]
-        # Clamp raw_score to expected range then invert: -0.5 → 1.0, 0.0 → 0.5, 0.5 → 0.0
-        normalized = float(np.clip(1.0 - (raw_score + 0.5), 0.0, 1.0))
+        # Normalize: decision_function of -0.2 or below → score ≈ 1.0
+        # Borderline anomaly (-0.02) → score ≈ 0.1  (won't clear THRESHOLD=0.65)
+        # This eliminates low-confidence false positives from the contamination boundary.
+        normalized = float(np.clip(-df / 0.2, 0.0, 1.0))
 
         if normalized < THRESHOLD:
             return None
