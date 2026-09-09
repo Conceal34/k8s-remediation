@@ -21,6 +21,7 @@ def route_decision(state: dict) -> dict:
     """
     # FR-3.6: Pipeline error → always escalate safely
     if state.get("pipeline_error"):
+        service = state.get("service", "")
         state.update({
             "final_action":     "escalate_no_op",
             "risk_tier":        "high",
@@ -30,6 +31,14 @@ def route_decision(state: dict) -> dict:
         })
         print(f"[PolicyEngine] Pipeline error -> escalating: {state['pipeline_error']}")
         _persist_and_route(state, outcome="escalated")
+        # Bug 3 Fix: clear the cooldown lock so the next detection tick is not blocked
+        try:
+            from cache import get_redis
+            r = get_redis()
+            if r and service:
+                r.delete(f"pipeline_cooldown:{service}")
+        except Exception:
+            pass
         return state
 
     risk       = state.get("risk_tier",        "high")

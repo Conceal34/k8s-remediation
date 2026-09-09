@@ -211,26 +211,51 @@ async def collection_loop(anomaly_callback=None):
 
             if ad.model is not None and new_samples:
                 context = _fetch_recent_context()
+
+                # Bug 4 Fix: Score per-SERVICE per tick using all metrics together,
+                # not per-sample. This ensures crash_loop (restarts/error_rate) is
+                # always evaluated alongside CPU/memory in the same call.
+                scored_services = set()
                 for sample in new_samples:
-                    if sample.metric_type == "cpu":
-                        result = ad.score_sample(sample, context)
-                        if result:
-                            # Debounce check to prevent pipeline spam while an incident is active
-                            try:
-                                from cache import get_redis
-                                r = get_redis()
-                                lock_key = f"pipeline_cooldown:{sample.service}"
-                                if r and r.get(lock_key):
-                                    continue
-                                if r:
-                                    r.setex(lock_key, 300, "active") # 5-minute cooldown lock
-                            except Exception:
-                                pass
-                            
-                            score, severity = result
-                            anomaly = ad.persist_anomaly(sample, score, severity)
-                            if anomaly_callback:
-                                asyncio.create_task(anomaly_callback(anomaly, context))
+                    if sample.service in scored_services:
+                        continue
+                    if sample.metric_type != "cpu":
+                        continue  # Use cpu sample as the trigger; vec is built from full context
+                    scored_services.add(sample.service)
+
+                    result = ad.score_sample(sample, context)
+                    if result:
+                        # Debounce: prevent pipeline spam while an incident is active
+                        lock_key = f"pipeline_cooldown:{sample.service}"
+                        try:
+                            from cache import get_redis
+                            r = get_redis()
+                            if r and r.get(lock_key):
+                                continue
+                            if r:
+                                r.setex(lock_key, 300, "active")  # 5-min cooldown lock
+                        except Exception:
+                            pass
+
+                        score, severity = result
+                        anomaly = ad.persist_anomaly(sample, score, severity)
+                        if anomaly_callback:
+                            # Bug 1/3 Fix: wrap the task so a mid-run crash (e.g. 429)
+                            # clears the cooldown lock — preventing the "stuck on detector" state.
+                            async def _safe_pipeline(a=anomaly, c=context, svc=sample.service, lk=lock_key):
+                                try:
+                                    await anomaly_callback(a, c)
+                                except Exception as exc:
+                                    print(f"[MetricsCollector] Pipeline task failed for {svc}: {exc}")
+                                    # Clear lock so next tick can retry
+                                    try:
+                                        from cache import get_redis
+                                        r2 = get_redis()
+                                        if r2:
+                                            r2.delete(lk)
+                                    except Exception:
+                                        pass
+                            asyncio.create_task(_safe_pipeline())
             elif ad.model is None:
                 ad.train()
 

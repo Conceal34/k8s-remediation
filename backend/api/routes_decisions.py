@@ -41,8 +41,8 @@ def _serialize_decision(d: Decision) -> dict:
             "id": d.approval.id,
             "operator": d.approval.operator,
             "action_taken": d.approval.action_taken,
-            "edited_action": d.approval.edited_action,
-            "acted_at": d.approval.acted_at.isoformat() if d.approval.acted_at else None,
+            "edited_action": d.approval.override_action,
+            "acted_at": d.approval.decided_at.isoformat() if d.approval.decided_at else None,
         } if d.approval else None,
     }
 

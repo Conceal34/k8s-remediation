@@ -2,11 +2,37 @@ import { useEffect, useState } from 'react';
 import { getSettings } from '../api';
 
 export default function SettingsView() {
-  const [, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(null);
+  const [error, setError] = useState(false);
+
+  const fetchSettings = () => {
+    setError(false);
+    getSettings()
+      .then(res => setSettings(res.data))
+      .catch(e => {
+        console.error(e);
+        setError(true);
+      });
+  };
 
   useEffect(() => {
-    getSettings().then(res => setSettings(res.data)).catch(console.error);
+    fetchSettings();
   }, []);
+
+  if (error) {
+    return (
+      <div style={{ padding: '20px', color: 'var(--color-danger)' }}>
+        Failed to load settings. <button onClick={fetchSettings} className="btn-ghost">Retry</button>
+      </div>
+    );
+  }
+
+  if (!settings) return <div style={{ padding: '20px' }}>Loading settings...</div>;
+
+  const getRiskBadge = (tier: string) => {
+    const cls = tier === 'low' ? 'low' : tier === 'medium' ? 'medium' : 'high';
+    return <span className={`risk-badge ${cls}`}>{tier.charAt(0).toUpperCase() + tier.slice(1)}</span>;
+  };
 
   return (
     <section className="view active" id="view-settings">
@@ -17,16 +43,20 @@ export default function SettingsView() {
           </div>
           <div className="settings-form">
             <div className="setting-row">
+              <label className="setting-label">LLM Model</label>
+              <input type="text" className="setting-input" value={settings.llm_model || 'unknown'} readOnly />
+            </div>
+            <div className="setting-row">
               <label className="setting-label">Anomaly Score Threshold</label>
-              <input type="number" className="setting-input" defaultValue="0.65" step="0.01" min="0" max="1" />
+              <input type="number" className="setting-input" value={settings.anomaly_score_threshold || 0.65} readOnly />
             </div>
             <div className="setting-row">
               <label className="setting-label">Polling Interval (seconds)</label>
-              <input type="number" className="setting-input" defaultValue="15" step="1" min="5" />
+              <input type="number" className="setting-input" value={settings.polling_interval_seconds || 15} readOnly />
             </div>
             <div className="setting-row">
               <label className="setting-label">Debate Round Cap</label>
-              <input type="number" className="setting-input" defaultValue="2" step="1" min="1" max="5" />
+              <input type="number" className="setting-input" value={settings.max_debate_rounds || 2} readOnly />
             </div>
           </div>
         </div>
@@ -37,15 +67,14 @@ export default function SettingsView() {
           <div className="settings-form">
             <div className="setting-row">
               <label className="setting-label">Confidence Threshold (auto-execute)</label>
-              <input type="number" className="setting-input" defaultValue="0.80" step="0.01" min="0" max="1" />
+              <input type="number" className="setting-input" value={settings.confidence_threshold || 0.80} readOnly />
             </div>
             <div className="setting-row">
               <label className="setting-label">Risk Tier Assignments</label>
               <div className="risk-config">
-                <div className="risk-item"><code>restart pod</code><span className="risk-badge low">Low</span></div>
-                <div className="risk-item"><code>scale replicas</code><span className="risk-badge medium">Medium</span></div>
-                <div className="risk-item"><code>rollback deploy</code><span className="risk-badge high">High</span></div>
-                <div className="risk-item"><code>cordon node</code><span className="risk-badge high">High</span></div>
+                {settings.action_risk_tiers && Object.entries(settings.action_risk_tiers).map(([action, tier]: any) => (
+                  <div className="risk-item" key={action}><code>{action}</code>{getRiskBadge(tier)}</div>
+                ))}
               </div>
             </div>
           </div>
@@ -56,11 +85,9 @@ export default function SettingsView() {
           </div>
           <div className="settings-form">
             <div className="whitelist-items">
-              <div className="whitelist-item"><code>kubectl rollout restart</code> <span className="wl-status enabled">Enabled</span></div>
-              <div className="whitelist-item"><code>kubectl rollout undo</code> <span className="wl-status enabled">Enabled</span></div>
-              <div className="whitelist-item"><code>kubectl scale</code> <span className="wl-status enabled">Enabled</span></div>
-              <div className="whitelist-item"><code>kubectl cordon</code> <span className="wl-status enabled">Enabled</span></div>
-              <div className="whitelist-item"><code>kubectl delete pod</code> <span className="wl-status disabled">Disabled</span></div>
+              {settings.whitelist && settings.whitelist.map((action: string) => (
+                <div className="whitelist-item" key={action}><code>{action}</code> <span className="wl-status enabled">Enabled</span></div>
+              ))}
             </div>
           </div>
         </div>

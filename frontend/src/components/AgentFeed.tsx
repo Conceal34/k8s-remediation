@@ -73,9 +73,14 @@ export default function AgentFeed() {
     es.onerror = () => setConnected(false);
 
     es.onmessage = (ev) => {
-      const event: PipelineEvent = JSON.parse(ev.data);
+      let event: PipelineEvent;
+      try {
+        event = JSON.parse(ev.data);
+      } catch (err) {
+        return;
+      }
 
-      if (event.type === 'connected') { setConnected(true); return; }
+      if (event.type === 'connected') { setConnected(true); setFeed(EMPTY); return; }
 
       setFeed(prev => {
         switch (event.type) {

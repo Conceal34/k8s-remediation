@@ -15,7 +15,7 @@ export default function App() {
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
       <main className="main-content">
         <TopBar currentView={currentView} />
-        {currentView === 'live' && <LiveDashboard />}
+        {currentView === 'live' && <LiveDashboard onViewChange={setCurrentView} />}
         {currentView === 'escalations' && <EscalationsView />}
         {currentView === 'history' && <HistoryView />}
         {currentView === 'settings' && <SettingsView />}

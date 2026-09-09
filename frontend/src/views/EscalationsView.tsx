@@ -1,208 +1,233 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { getEscalatedDecisions, submitApproval } from '../api';
+
+const Block = ({ emoji, title, accent, children }: { emoji: string, title: string, accent: string, children: ReactNode }) => (
+  <div style={{
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border-color)',
+    borderLeft: `3px solid ${accent}`,
+    borderRadius: 'var(--radius-sm)',
+    padding: '12px 14px',
+    marginBottom: '8px',
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+      <span style={{ fontSize: '1.1rem' }}>{emoji}</span>
+      <strong style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+        {title}
+      </strong>
+    </div>
+    <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)', lineHeight: '1.55' }}>
+      {children}
+    </div>
+  </div>
+);
+
+function sevColor(sev: string) {
+  if (sev === 'low') return 'var(--color-success)';
+  if (sev === 'medium') return 'var(--color-warning)';
+  return 'var(--color-danger)';
+}
 
 export default function EscalationsView() {
   const [queue, setQueue] = useState<any[]>([]);
   const [activeEscalation, setActiveEscalation] = useState<any>(null);
-  
-  // Mock fallback
-  const mockQueue = [
-    { id: "esc-001", service: "svc-payments", risk: "high", anomaly: "P99 latency spike", time: "10:32:01", rounds: 2, consensus: true },
-    { id: "esc-002", service: "svc-auth", risk: "medium", anomaly: "Elevated 5xx rate", time: "10:15:44", rounds: 1, consensus: true }
-  ];
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const fetchEscalations = () => {
+    setLoading(true);
+    setErrorMsg(null);
     getEscalatedDecisions()
       .then(res => {
-        const q = res.data?.length ? res.data.map((d: any) => ({
-          ...d,
-          service: d.service || d.anomaly?.service || "payment-service",
-          risk: d.risk_tier || d.risk || "high",
-          time: d.created_at ? new Date(d.created_at).toLocaleTimeString() : (d.time || '10:00:00'),
-          rounds: d.round_count !== undefined ? d.round_count : (d.rounds || 1),
-          consensus: d.consensus_reached !== undefined ? d.consensus_reached : true,
-          anomaly: typeof d.anomaly === "object" ? `Anomaly #${d.anomaly.id}` : (d.anomaly || "Anomaly")
-        })) : mockQueue;
+        const q = res.data || [];
         setQueue(q);
-        if (q.length > 0) setActiveEscalation(q[0]);
+        if (q.length > 0 && (!activeEscalation || !q.find((d: any) => d.id === activeEscalation.id))) {
+          setActiveEscalation(q[0]);
+        } else if (q.length === 0) {
+          setActiveEscalation(null);
+        }
+        setLoading(false);
       })
       .catch((e) => {
         console.error(e);
-        setQueue(mockQueue);
-        setActiveEscalation(mockQueue[0]);
+        setErrorMsg("Failed to load escalations. Please check your connection.");
+        setQueue([]);
+        setActiveEscalation(null);
+        setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchEscalations();
   }, []);
 
-  const handleApprove = async () => {
+  const handleAction = async (action: string, edited_action?: string) => {
     if (!activeEscalation?.id) return;
     try {
-      await submitApproval(activeEscalation.id, { operator: "admin", action_taken: "approved" });
-      alert("Decision approved");
-    } catch(e) {
-      alert("Decision approved (mock)");
+      await submitApproval(activeEscalation.id, { 
+        operator: "admin", 
+        action_taken: action,
+        edited_action: edited_action
+      });
+      // Remove from queue locally
+      const newQueue = queue.filter(q => q.id !== activeEscalation.id);
+      setQueue(newQueue);
+      if (newQueue.length > 0) {
+        setActiveEscalation(newQueue[0]);
+      } else {
+        setActiveEscalation(null);
+      }
+    } catch(e: any) {
+      console.error(e);
+      alert(`Failed to submit approval: ${e.response?.data?.detail || e.message}`);
+    }
+  };
+
+  const handleEdit = () => {
+    const defaultAction = activeEscalation?.final_action || "restart";
+    const edited = prompt("Enter the modified action (e.g., restart, scale_up, rollback):", defaultAction);
+    if (edited && edited !== "") {
+      handleAction("edit", edited);
     }
   };
 
   return (
     <section className="view active" id="view-escalations">
-      <div className="escalation-detail" id="escalation-detail">
-        <div className="escalation-queue-panel">
+      <div className="escalation-detail" id="escalation-detail" style={{ display: 'flex', gap: '20px' }}>
+        
+        {/* Left Side: Queue Panel */}
+        <div className="escalation-queue-panel" style={{ flex: '0 0 300px' }}>
           <div className="card">
             <div className="card-header">
-              <h2 className="card-title">Escalation Queue</h2>
-              <span className="card-badge warn-badge">{queue.length} pending</span>
+              <h2 className="card-title">Pending Escalations</h2>
+              <span className="badge badge-error">{queue.length}</span>
             </div>
-            <div className="queue-list" id="escalation-queue">
-              {queue.map((esc, i) => (
-                <div key={i} className={`queue-item risk-${esc.risk} ${activeEscalation?.id === esc.id ? "active" : ""}`} onClick={() => setActiveEscalation(esc)}>
-                  <div className="queue-service">{esc.service}</div>
-                  <div className="queue-meta">
-                    <span className={`risk-badge ${esc.risk}`}>{esc.risk}</span>
-                    <span>{typeof esc.anomaly === "object" ? `Anomaly #${esc.anomaly.id}` : esc.anomaly}</span>
+            <div className="escalation-queue" id="escalation-queue">
+              {loading && <div style={{ padding: '16px', color: 'var(--text-muted)' }}>Loading...</div>}
+              {errorMsg && <div style={{ padding: '16px', color: 'var(--color-danger)' }}>{errorMsg}</div>}
+              {!loading && !errorMsg && queue.length === 0 && (
+                <div style={{ padding: '16px', color: 'var(--text-muted)' }}>No pending escalations. All clear!</div>
+              )}
+              {queue.map((item, idx) => {
+                const service = item.service || item.anomaly?.service || item.anomaly?.metric_sample?.service || "unknown";
+                const isSelected = activeEscalation?.id === item.id;
+                return (
+                  <div 
+                    key={item.id || idx} 
+                    className={`queue-item ${isSelected ? 'active' : ''}`}
+                    onClick={() => setActiveEscalation(item)}
+                    style={{ cursor: 'pointer', padding: '12px', borderBottom: '1px solid var(--border-color)', background: isSelected ? 'var(--bg-tertiary)' : 'transparent' }}
+                  >
+                    <div className="item-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span className="item-service" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent-primary)' }}>
+                        {service}
+                      </span>
+                      <span className="item-time" style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                        {item.created_at ? new Date(item.created_at).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                    <div className="item-title" style={{ fontSize: '0.85rem' }}>
+                      Anomaly #{item.anomaly?.id || item.anomaly_id}
+                    </div>
+                    <div className="item-meta" style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                      <span className={`risk-badge ${item.risk_tier || 'high'}`}>{item.risk_tier || 'high'} Risk</span>
+                    </div>
                   </div>
-                  <div className="queue-meta">
-                    <span>{esc.time || '10:00:00'}</span>
-                    <span>·</span>
-                    <span>{esc.rounds} round{esc.rounds > 1 ? "s" : ""}</span>
-                    <span>·</span>
-                    <span>{esc.consensus ? "consensus" : "no consensus"}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
 
-        <div className="escalation-review-panel" id="escalation-review-panel">
-          {activeEscalation && (
+        {/* Right Side: Active Escalation Detail */}
+        <div className="escalation-content-panel" style={{ flex: '1', minWidth: 0 }}>
+          {!activeEscalation && !loading ? (
+            <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <h3>No Escalations Selected</h3>
+              <p>The queue is currently empty.</p>
+            </div>
+          ) : activeEscalation ? (
             <div className="card">
-              <div className="card-header">
+              <div className="card-header" style={{ paddingBottom: '16px' }}>
                 <h2 className="card-title">Escalation Review</h2>
-                <div className="escalation-meta">
-                  <span className={`risk-badge ${activeEscalation.risk}`} id="esc-risk">{activeEscalation.risk} Risk</span>
-                  <span className="service-tag" id="esc-service">{activeEscalation.service}</span>
+                <div className="escalation-meta" style={{ display: 'flex', gap: '10px' }}>
+                  <span className={`risk-badge ${activeEscalation.risk_tier || 'high'}`}>{activeEscalation.risk_tier || 'high'} Risk</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--accent-primary)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>
+                    {activeEscalation.service || activeEscalation.anomaly?.service || "unknown"}
+                  </span>
                 </div>
               </div>
 
-              <div className="review-section" id="diagnosis-section">
-                <h3 className="section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="section-icon"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  Diagnosis
-                </h3>
-                <div className="diagnosis-content" id="diagnosis-text">
-                  <p>Elevated p99 latency on <code>{activeEscalation.service}</code> correlates with a connection-pool spike. The pool saturation is causing request queuing, leading to cascading timeout errors in downstream services.</p>
-                </div>
-              </div>
+              <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {/* Detection */}
+                {activeEscalation.anomaly && typeof activeEscalation.anomaly === 'object' && (
+                  <Block emoji="🌲" title="Isolation Forest — Detection" accent={sevColor(activeEscalation.anomaly.severity)}>
+                    Score: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-info)' }}>{activeEscalation.anomaly.score?.toFixed(3) || '0.000'}</span>
+                    {' '}· Detected At: {activeEscalation.anomaly.detected_at ? new Date(activeEscalation.anomaly.detected_at).toLocaleTimeString() : '—'}
+                  </Block>
+                )}
 
-              <div className="review-section" id="debate-section">
-                <h3 className="section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="section-icon"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-                  Remediation ⇄ Critic Debate
-                </h3>
-                <div className="debate-trail" id="debate-trail">
-                  <div className="debate-round">
-                    <div className="round-header">
-                      <span className="round-label">Round 1</span>
-                    </div>
-                    <div className="debate-messages">
-                      <div className="debate-msg remediation">
-                        <div className="msg-header">
-                          <span className="agent-name">Remediation Agent</span>
-                          <span className="confidence-tag">confidence: 0.62</span>
-                        </div>
-                        <div className="msg-body">
-                          <code>kubectl rollout restart deployment/{activeEscalation.service}</code>
-                          <p>Restart the deployment to clear the leaked connection pool handles and restore normal latency.</p>
-                        </div>
-                      </div>
-                      <div className="debate-msg critic revise">
-                        <div className="msg-header">
-                          <span className="agent-name">Critic Agent</span>
-                          <span className="verdict-tag revise">REVISE</span>
-                        </div>
-                        <div className="msg-body">
-                          <p>A restart won't clear the pool leak — the connection handles are held at the process level and will be re-created with the same buggy configuration. The root cause is the deploy, not the pod lifecycle.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="debate-round">
-                    <div className="round-header">
-                      <span className="round-label">Round 2</span>
-                    </div>
-                    <div className="debate-messages">
-                      <div className="debate-msg remediation">
-                        <div className="msg-header">
-                          <span className="agent-name">Remediation Agent</span>
-                          <span className="confidence-tag">confidence: 0.71</span>
-                        </div>
-                        <div className="msg-body">
-                          <code>kubectl rollout undo deployment/{activeEscalation.service}</code>
-                          <p>Rollback to the previous known-good revision to eliminate the connection-pool bug.</p>
-                        </div>
-                      </div>
-                      <div className="debate-msg critic approve">
-                        <div className="msg-header">
-                          <span className="agent-name">Critic Agent</span>
-                          <span className="verdict-tag approve">APPROVE</span>
-                        </div>
-                        <div className="msg-body">
-                          <p>Agreed. Rollback directly addresses the root cause identified in the diagnosis.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                {/* Diagnosis */}
+                {activeEscalation.diagnosis_text && (
+                  <Block emoji="🧠" title="Diagnosis Agent — Gemini" accent="var(--accent-primary)">
+                    {activeEscalation.diagnosis_text}
+                  </Block>
+                )}
 
-              <div className="review-section" id="policy-section">
-                <h3 className="section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="section-icon"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  Autonomy Policy Engine
-                </h3>
-                <div className="policy-verdict" id="policy-verdict">
-                  <div className="policy-row">
-                    <span className="policy-label">Risk Tier</span>
-                    <span className="policy-value risk-high">High</span>
-                  </div>
-                  <div className="policy-row">
-                    <span className="policy-label">Confidence</span>
-                    <span className="policy-value">0.71</span>
-                  </div>
-                  <div className="policy-row">
-                    <span className="policy-label">Consensus</span>
-                    <span className="policy-value consensus-yes">Reached (Round 2)</span>
-                  </div>
-                  <div className="policy-row">
-                    <span className="policy-label">Routing</span>
-                    <span className="policy-value escalated">→ ESCALATED to Operator</span>
-                  </div>
-                </div>
-              </div>
+                {/* Debate Trail */}
+                {activeEscalation.remediation_proposals && activeEscalation.remediation_proposals.map((prop: any, idx: number) => {
+                  const verdict = (activeEscalation.critic_verdicts || []).find((v: any) => v.round === prop.round);
+                  return (
+                    <React.Fragment key={idx}>
+                      <Block emoji="🛠️" title={`Remediation Agent — Round ${prop.round}`} accent="var(--color-info)">
+                        Action: <strong style={{ color: 'var(--text-primary)' }}>{prop.action}</strong>
+                        {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round(prop.confidence * 100)}%</strong>
+                        <br />
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{prop.justification}</span>
+                      </Block>
+                      {verdict && (
+                        <Block emoji="⚖️" title={`Critic Agent — Round ${verdict.round}`}
+                          accent={verdict.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)'}>
+                          Verdict:{' '}
+                          <strong style={{ color: verdict.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                            {verdict.verdict}
+                          </strong>
+                          <br />
+                          <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{verdict.reason}</span>
+                        </Block>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
 
-              <div className="review-section operator-actions" id="operator-actions">
-                <h3 className="section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="section-icon"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                  Operator Decision
-                </h3>
-                <textarea className="operator-note" id="operator-note" placeholder="Optional: Add a note explaining your decision…" rows={2}></textarea>
-                <div className="action-buttons">
-                  <button className="btn btn-approve" id="btn-approve" onClick={handleApprove}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                    Approve
-                  </button>
-                  <button className="btn btn-edit" id="btn-edit" onClick={() => alert("Opening editor")}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    Edit Action
-                  </button>
-                  <button className="btn btn-reject" id="btn-reject" onClick={() => alert("Rejected")}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                    Reject
-                  </button>
+                {/* Policy Engine */}
+                <Block emoji="🛡️" title="Policy Engine — Escalated" accent="var(--color-warning)">
+                  The Policy Engine escalated this decision because automatic execution criteria were not met.
+                  <br />
+                  Proposed Action: <strong style={{ color: 'var(--text-primary)' }}>{activeEscalation.final_action}</strong>
+                  {' '}· System Confidence: {Math.round((activeEscalation.confidence_score || 0) * 100)}%
+                </Block>
+
+                {/* Operator Actions */}
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
+                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px' }}>Operator Override</h3>
+                  <div className="action-buttons" style={{ display: 'flex', gap: '12px' }}>
+                    <button className="btn btn-approve" onClick={() => handleAction('approve')} style={{ flex: 1, padding: '10px', background: 'var(--color-success)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>
+                      ✓ Approve
+                    </button>
+                    <button className="btn btn-edit" onClick={handleEdit} style={{ flex: 1, padding: '10px', background: 'var(--color-info)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>
+                      ✎ Edit Action
+                    </button>
+                    <button className="btn btn-reject" onClick={() => handleAction('reject')} style={{ flex: 1, padding: '10px', background: 'var(--color-danger)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>
+                      ✕ Reject
+                    </button>
+                  </div>
                 </div>
+
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

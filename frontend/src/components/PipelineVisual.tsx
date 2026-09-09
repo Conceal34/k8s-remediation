@@ -40,7 +40,7 @@ function getStageClass(stageName: StageProps['name'], current: Stage): string {
   const stageIdx = STAGE_ORDER.indexOf(stageName);
 
   // All stages green when pipeline completed successfully
-  if (current === 'done' || current === 'completed') {
+  if (current === 'done') {
     return 'completed';
   }
 
@@ -79,8 +79,11 @@ function getStatusLabel(stageName: StageProps['name'], current: Stage, subLabel:
 export default function PipelineVisual() {
   const [decisions, setDecisions] = useState<any[]>([]);
   const [lastFetch, setLastFetch] = useState<string>('—');
+  // Bug 2/6 Fix: live SSE-driven stage — overrides deriveStage() while pipeline is in-flight
+  const [liveStage, setLiveStage] = useState<Stage | null>(null);
 
   useEffect(() => {
+    // DB polling — for initial page load and completed pipeline state
     const fetchDecisions = async () => {
       try {
         const res = await getDecisions();
@@ -92,10 +95,36 @@ export default function PipelineVisual() {
     };
     fetchDecisions();
     const id = setInterval(fetchDecisions, 4000);
-    return () => clearInterval(id);
+
+    // SSE subscription — advances stages in real time during in-flight runs
+    const es = new EventSource('/api/sse/pipeline-feed');
+    es.onerror = () => setLiveStage(null);
+    es.onmessage = (ev) => {
+      try {
+        const event = JSON.parse(ev.data);
+        switch (event.type) {
+          case 'connected':    setLiveStage(null); break;  // reset on reconnect
+          case 'anomaly_detected': setLiveStage('detecting'); break;
+          case 'diagnosis':    setLiveStage('diagnosing'); break;
+          case 'remediation':  setLiveStage('remediating'); break;
+          case 'critic':       setLiveStage('critic'); break;
+          case 'outcome':
+            setLiveStage(event.outcome === 'auto_executed' ? 'done' : 'escalated');
+            // Refresh DB state after outcome so the footer stats are accurate
+            setTimeout(fetchDecisions, 500);
+            // Clear live stage after 10s — return to DB-derived state
+            setTimeout(() => setLiveStage(null), 10000);
+            break;
+          case 'error':        setLiveStage('error'); break;
+        }
+      } catch (_) {}
+    };
+
+    return () => { clearInterval(id); es.close(); };
   }, []);
 
-  const current = deriveStage(decisions);
+  // Use SSE-driven stage if mid-flight; otherwise derive from last completed DB record
+  const current = liveStage ?? deriveStage(decisions);
   const latest  = decisions[0];
 
   const stages: StageProps[] = [
@@ -141,7 +170,7 @@ export default function PipelineVisual() {
       {latest && (
         <div style={{ padding: '8px 16px 12px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <span>Latest: <code style={{ color: 'var(--accent-primary)' }}>{latest.service || 'payment-service'}</code></span>
-          <span>Round: <strong>{latest.round_count || 0}/2</strong></span>
+          <span>Round: <strong>{latest.round_count || 0}</strong></span>
           <span>Confidence: <strong>{((latest.confidence_score || 0) * 100).toFixed(0)}%</strong></span>
           <span style={{ color: outcomeColor, fontWeight: 600 }}>{outcomeText}</span>
         </div>

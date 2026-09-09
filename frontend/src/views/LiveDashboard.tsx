@@ -8,7 +8,7 @@ import AgentFeed from '../components/AgentFeed';
 import DecisionTable from '../components/DecisionTable';
 import { getDecisions } from '../api';
 
-export default function LiveDashboard() {
+export default function LiveDashboard({ onViewChange }: { onViewChange?: (v: string) => void }) {
   const [anomalies, setAnomalies] = useState<any[]>([]);
   const [decisions, setDecisions] = useState<any[]>([]);
 
@@ -35,7 +35,7 @@ export default function LiveDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const escalatedCount = decisions.filter((d: any) => d.autonomy_outcome === 'escalated').length;
+  const escalatedCount = decisions.filter((d: any) => d.autonomy_outcome === 'escalated' && !d.approval).length;
   const autoCount = decisions.filter((d: any) => d.autonomy_outcome === 'auto_executed').length;
   const avgRounds = decisions.length > 0 ? (decisions.reduce((acc: number, d: any) => acc + (d.round_count || 1), 0) / decisions.length).toFixed(1) : "0";
 
@@ -61,7 +61,7 @@ export default function LiveDashboard() {
       <div className="card table-card" id="history-table-card">
         <div className="card-header">
           <h2 className="card-title">Recent Decisions</h2>
-          <button className="btn-ghost" id="view-all-history">View all →</button>
+          <button className="btn-ghost" id="view-all-history" onClick={() => onViewChange && onViewChange('history')}>View all →</button>
         </div>
         <div className="table-wrapper">
           <DecisionTable decisions={decisions.slice(0, 5)} />

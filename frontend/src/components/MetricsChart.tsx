@@ -46,8 +46,11 @@ export default function MetricsChart() {
         hasAnomaly = activeAnomalies.length > 0;
 
         if (rawSamples.length >= 4) {
-          // Isolate telemetry for monitored service (payment-service)
-          const targetSamples = rawSamples.filter((s: any) => s.service === 'payment-service');
+          // If there's an anomaly, focus the chart on that service, otherwise default to payment-service
+          const targetService = activeAnomalies.length > 0 && activeAnomalies[0].service ? activeAnomalies[0].service : 'payment-service';
+          
+          // Isolate telemetry for the monitored service
+          const targetSamples = rawSamples.filter((s: any) => s.service === targetService);
           const samplesToUse = targetSamples.length >= 4 ? targetSamples : rawSamples;
 
           const cpus = samplesToUse.filter((s: any) => s.metric_type === 'cpu');
@@ -77,36 +80,14 @@ export default function MetricsChart() {
         // Fallback to smooth 5m data if offline
       }
 
-      // If insufficient data points, generate a 5-minute historical series (30 data points)
       if (cpuData.length < 5) {
-        const now = new Date();
-        timeLabels.length = 0;
-        const totalPoints = 30;
-        for (let i = totalPoints - 1; i >= 0; i--) {
-          const t = new Date(now.getTime() - i * 10000);
-          timeLabels.push(
-            t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-          );
-        }
-
-        function genFallback(base: number, variance: number, spike: any) {
-          const d = [];
-          for (let i = 0; i < 30; i++) {
-            let v = base + (Math.random() - 0.5) * variance;
-            if (spike && i >= spike.start && i <= spike.end) v += spike.amount;
-            d.push(Math.max(0, Math.min(100, v)));
-          }
-          return d;
-        }
-
-        cpuData = genFallback(45, 12, hasAnomaly ? { start: 22, end: 26, amount: 48 } : null);
-        memData = genFallback(38, 6, null);
-        errData = genFallback(4, 3, hasAnomaly ? { start: 22, end: 26, amount: 22 } : null);
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = "var(--text-muted)";
+        ctx.font = '14px "Inter", sans-serif';
+        ctx.textAlign = "center";
+        ctx.fillText("Waiting for telemetry data...", W / 2, H / 2);
+        return;
       }
-
-      // Ensure equal lengths
-      while (memData.length < cpuData.length) memData.push(35);
-      while (errData.length < cpuData.length) errData.push(2);
 
       ctx.clearRect(0, 0, W, H);
 

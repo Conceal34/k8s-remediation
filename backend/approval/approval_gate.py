@@ -62,6 +62,14 @@ def process_operator_decision(
 
         if action_taken in ("approve", "edit"):
             execute_action(exec_state)
+            
+            # Fix cache mismatch: bust the cache so the UI updates immediately
+            try:
+                from cache import invalidate_decision_caches
+                invalidate_decision_caches()
+            except ImportError:
+                pass
+                
             return {
                 "status":  "executed",
                 "action":  exec_state["final_action"],

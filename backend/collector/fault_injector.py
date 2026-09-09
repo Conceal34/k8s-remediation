@@ -150,6 +150,13 @@ def clear_active_fault(service: str | None = None):
     except Exception:
         pass
 
+    # Bug 7 Fix: immediately bust anomalies_active cache so KPI card resets
+    try:
+        from cache import cache_invalidate, KEYS
+        cache_invalidate(KEYS["anomalies_active"])
+    except Exception:
+        pass
+
     try:
         if service and os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:

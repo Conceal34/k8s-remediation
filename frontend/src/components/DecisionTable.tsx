@@ -1,4 +1,4 @@
-import React, { useState, ReactNode } from 'react';
+import React, { useState, type ReactNode } from 'react';
 
 // Helper component identical to the one in AgentFeed
 const Block = ({ emoji, title, accent, children }: { emoji: string, title: string, accent: string, children: ReactNode }) => (
@@ -89,7 +89,7 @@ export default function DecisionTable({ decisions }: { decisions: any[] }) {
                   <td>{anomalyIdStr}</td>
                   <td><span className={`risk-badge ${risk}`}>{risk}</span></td>
                   <td className="cell-mono">{confidence.toFixed(2)}</td>
-                  <td className="cell-mono">{rounds}/2</td>
+                  <td className="cell-mono">{rounds}</td>
                   <td>
                     <span className={`outcome-badge ${outcome}`}>
                       {outcome === "auto" ? "Auto-Executed" : (outcome === "auto_executed" ? "Auto-Executed" : outcome.charAt(0).toUpperCase() + outcome.slice(1))}

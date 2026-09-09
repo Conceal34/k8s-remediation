@@ -63,17 +63,33 @@ class AnomalyDetector:
             return None
 
         # Don't score until the model has seen enough distinct samples.
-        if self._trained_rows < 30:
+        if self._trained_rows < 5:
             return None
 
         # Build feature vector for this service
         vec = [0.0, 0.0, 0.0, 0.0]
+        # First, populate from historical context
         for s in context:
             if s.service == sample.service:
                 idx = METRIC_IDX.get(s.metric_type)
                 if idx is not None:
                     vec[idx] = float(s.value)
+                    
+        # Then OVERRIDE with the actual live incoming sample!
+        idx = METRIC_IDX.get(sample.metric_type)
+        if idx is not None:
+            vec[idx] = float(sample.value)
 
+        # 1. Deterministic Rule-Based Checks (for discrete/constant baseline metrics)
+        # Isolation forests ignore features that are perfectly constant (0.0) in training data.
+        restarts = vec[2]
+        error_rate = vec[3]
+        if restarts > 3:
+            return 0.95, "high"
+        if error_rate > 0.10:
+            return 0.90, "high"
+
+        # 2. AI-Driven Check (for continuous metrics like CPU/Memory)
         X = np.array([vec])
 
         # decision_function > 0  → normal (return immediately)
