@@ -76,15 +76,29 @@ function getStatusLabel(stageName: StageProps['name'], current: Stage, subLabel:
   return subLabel;
 }
 
-export default function PipelineVisual() {
+export default function PipelineVisual({ activeAnomaliesCount = 0 }: { activeAnomaliesCount?: number }) {
   const [decisions, setDecisions] = useState<any[]>([]);
   const [lastFetch, setLastFetch] = useState<string>('—');
-  // Bug 2/6 Fix: live SSE-driven stage — overrides deriveStage() while pipeline is in-flight
   const [liveStage, setLiveStage] = useState<Stage | null>(null);
+  const [isCleared, setIsCleared] = useState(false);
+
+  useEffect(() => {
+    if (activeAnomaliesCount > 0) {
+      setIsCleared(false);
+    } else {
+      const t = setTimeout(() => {
+        setIsCleared(true);
+        setDecisions([]);
+        setLiveStage(null);
+      }, 30000);
+      return () => clearTimeout(t);
+    }
+  }, [activeAnomaliesCount]);
 
   useEffect(() => {
     // DB polling — for initial page load and completed pipeline state
     const fetchDecisions = async () => {
+      if (isCleared) return;
       try {
         const res = await getDecisions();
         setDecisions(res.data || []);
@@ -121,7 +135,7 @@ export default function PipelineVisual() {
     };
 
     return () => { clearInterval(id); es.close(); };
-  }, []);
+  }, [isCleared]);
 
   // Use SSE-driven stage if mid-flight; otherwise derive from last completed DB record
   const current = liveStage ?? deriveStage(decisions);

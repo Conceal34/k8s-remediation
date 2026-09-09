@@ -29,9 +29,12 @@ def run_diagnosis(state: dict) -> str:
     metric  = state.get("metric_type", "cpu")
 
     # 1. Check Redis Incident Cache
-    cached = get_incident_cache(service, metric, "diagnosis")
+    severity = state.get("severity", "high")
+    cache_key_metric = f"{metric}:{severity}"
+    
+    cached = get_incident_cache(service, cache_key_metric, "diagnosis")
     if cached:
-        print(f"[Redis Cache HIT] Reused verified diagnosis for {service}:{metric} (0 API calls used!)")
+        print(f"[Redis Cache HIT] Reused verified diagnosis for {service}:{cache_key_metric} (0 API calls used!)")
         return cached
 
     # 2. Cache Miss — Invoke Gemini with Key Rotation
@@ -60,6 +63,6 @@ Based on this data, provide your root-cause diagnosis.
 
     # 3. Store in Redis for future recurring incidents
     if diagnosis_text:
-        set_incident_cache(service, metric, "diagnosis", diagnosis_text, ttl=3600)
+        set_incident_cache(service, cache_key_metric, "diagnosis", diagnosis_text, ttl=3600)
 
     return diagnosis_text

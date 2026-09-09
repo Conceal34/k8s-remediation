@@ -54,8 +54,8 @@ export default function LiveDashboard({ onViewChange }: { onViewChange?: (v: str
       </div>
 
       <div className="pipeline-row">
-        <PipelineVisual />
-        <AgentFeed />
+        <PipelineVisual activeAnomaliesCount={anomalies.length} />
+        <AgentFeed activeAnomaliesCount={anomalies.length} />
       </div>
 
       <div className="card table-card" id="history-table-card">

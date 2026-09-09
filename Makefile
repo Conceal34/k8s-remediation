@@ -2,7 +2,7 @@
 
 backend:
 	PYTHONPATH=$(PWD)/backend .venv/bin/python3 backend/database/seed.py
-	PYTHONPATH=$(PWD)/backend .venv/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+	PYTHONPATH=$(PWD)/backend .venv/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
 frontend:
 	cd frontend && npm run dev

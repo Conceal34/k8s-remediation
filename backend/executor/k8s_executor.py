@@ -118,19 +118,12 @@ def _rollback(apps_v1, service: str) -> str:
     if apps_v1 is None:
         return f"[Simulated] Rollback initiated for deployment '{service}'."
     try:
-        patch = {
-            "spec": {
-                "template": {
-                    "metadata": {
-                        "annotations": {
-                            "cloudops/rollback-initiated-at": datetime.now(timezone.utc).isoformat()
-                        }
-                    }
-                }
-            }
-        }
-        resp = apps_v1.patch_namespaced_deployment(name=service, namespace=NAMESPACE, body=patch)
-        return f"Rollback initiated for deployment '{resp.metadata.name}'."
+        # The Python Kubernetes client does not have a native equivalent to `kubectl rollout undo`.
+        # A real implementation requires listing ReplicaSets, sorting by revision annotations,
+        # and patching the Deployment's pod spec to match the previous ReplicaSet's pod spec.
+        raise NotImplementedError(
+            "Native rollback requires ReplicaSet template extraction (not implemented in demo)."
+        )
     except Exception as exc:
         if "Connection refused" in str(exc) or "Max retries exceeded" in str(exc):
             return f"[Simulated Fallback] Rollback initiated for deployment '{service}'."

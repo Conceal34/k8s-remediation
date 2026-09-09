@@ -57,7 +57,12 @@ def run_critic(state: dict, proposal: dict) -> dict:
     action  = proposal.get("action", "restart")
 
     # 1. Check Redis Incident Cache
-    cache_key_metric = f"{metric}:{action}"
+    # Hash the diagnosis text for better cache granularity if available, or just use severity
+    import hashlib
+    diag_hash = hashlib.md5(state.get('diagnosis_text', '').encode('utf-8')).hexdigest()[:8]
+    severity = state.get("severity", "high")
+    
+    cache_key_metric = f"{metric}:{action}:{severity}:{diag_hash}"
     cached = get_incident_cache(service, cache_key_metric, "critic")
     if cached:
         print(f"[Redis Cache HIT] Reused verified critic verdict for {service}:{cache_key_metric}")
@@ -85,10 +90,8 @@ Evaluate this proposal.
     verdict = _parse_verdict(response.content)
 
     if not verdict:
-        verdict = {
-            "verdict": "APPROVE",
-            "reason": f"Action '{action}' addresses the root cause safely.",
-        }
+        # Prevent fail-open vulnerability
+        raise ValueError(f"Failed to parse LLM response into valid verdict JSON: {response.content}")
 
     # 3. Store in Redis for future recurring incidents
     set_incident_cache(service, cache_key_metric, "critic", verdict, ttl=3600)

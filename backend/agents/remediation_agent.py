@@ -67,10 +67,15 @@ def run_remediation(state: dict, critic_feedback: str = "") -> dict:
     round_num = state.get("round_num", 1)
 
     # 1. In Round 1, check Redis Incident Cache
+    import hashlib
+    diag_hash = hashlib.md5(state.get('diagnosis_text', '').encode('utf-8')).hexdigest()[:8]
+    severity = state.get("severity", "high")
+    cache_key_metric = f"{metric}:{severity}:{diag_hash}"
+
     if round_num == 1 and not critic_feedback:
-        cached = get_incident_cache(service, metric, "remediation")
+        cached = get_incident_cache(service, cache_key_metric, "remediation")
         if cached:
-            print(f"[Redis Cache HIT] Reused verified remediation proposal for {service}:{metric}")
+            print(f"[Redis Cache HIT] Reused verified remediation proposal for {service}:{cache_key_metric}")
             return cached
 
     # 2. Cache Miss — Invoke Gemini with Key Rotation
@@ -95,15 +100,11 @@ Propose your remediation action now.
     proposal = _parse_proposal(response.content)
 
     if not proposal:
-        proposal = {
-            "action": "restart",
-            "justification": f"Fallback to safe rolling restart on {service}.",
-            "confidence": 0.80,
-            "risk_tier": "low",
-        }
+        # Prevent fail-open vulnerability
+        raise ValueError(f"Failed to parse LLM response into valid proposal JSON: {response.content}")
 
     # 3. Store in Redis for future recurring incidents
     if round_num == 1:
-        set_incident_cache(service, metric, "remediation", proposal, ttl=3600)
+        set_incident_cache(service, cache_key_metric, "remediation", proposal, ttl=3600)
 
     return proposal

@@ -59,11 +59,21 @@ const Spinner = ({ label }: { label: string }) => (
 );
 
 // ── main ───────────────────────────────────────────────────────────────────
-export default function AgentFeed() {
+export default function AgentFeed({ activeAnomaliesCount = 0 }: { activeAnomaliesCount?: number }) {
   const [feed, setFeed]         = useState<FeedState>(EMPTY);
   const [cleared, setCleared]   = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (activeAnomaliesCount === 0) {
+      const t = setTimeout(() => {
+        setFeed(EMPTY);
+        setCleared(null);
+      }, 30000);
+      return () => clearTimeout(t);
+    }
+  }, [activeAnomaliesCount]);
 
   useEffect(() => {
     const es = new EventSource('/api/sse/pipeline-feed');
