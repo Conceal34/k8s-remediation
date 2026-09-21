@@ -169,8 +169,10 @@ class AnomalyDetector:
                 bucket[key][idx] = float(s.value)
 
         keys = sorted(bucket.keys())
-        X    = np.array([bucket[k] for k in keys]) if keys else np.empty((0, 4))
-        return X, keys
+        # Filter out extreme injected faults from training data to prevent model drift
+        valid_keys = [k for k in keys if bucket[k][0] < 80.0 and bucket[k][1] < 80.0 and bucket[k][2] == 0]
+        X    = np.array([bucket[k] for k in valid_keys]) if valid_keys else np.empty((0, 4))
+        return X, valid_keys
 
 
 # Module-level singleton used by the metrics collector
