@@ -116,13 +116,28 @@ def invoke_gemini_with_rotation(messages: list, model: str | None = None, temper
     primary_model = model or CFG.get("agents", {}).get("model", {}).get("gemini", ULTIMATE_FALLBACK_MODEL)
 
     try:
-        return _try_invoke_model_across_keys(messages, primary_model, temperature)
+        msg = _try_invoke_model_across_keys(messages, primary_model, temperature)
     except Exception as primary_exc:
         if primary_model != ULTIMATE_FALLBACK_MODEL:
             print(f"[Gemini Fallback] ⚠️ Primary model '{primary_model}' failed ({primary_exc}). Falling back to ultimate model '{ULTIMATE_FALLBACK_MODEL}'...")
             try:
-                return _try_invoke_model_across_keys(messages, ULTIMATE_FALLBACK_MODEL, temperature)
+                msg = _try_invoke_model_across_keys(messages, ULTIMATE_FALLBACK_MODEL, temperature)
             except Exception as fallback_exc:
                 print(f"[Gemini Fallback] ⚠️ Ultimate fallback model '{ULTIMATE_FALLBACK_MODEL}' also failed: {fallback_exc}")
                 raise fallback_exc
-        raise primary_exc
+        else:
+            raise primary_exc
+            
+    # Normalize list-based content structures to a single string (fixes 'list object has no attribute strip' bug)
+    if isinstance(msg.content, list):
+        parts = []
+        for block in msg.content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and "text" in block:
+                parts.append(block["text"])
+        msg.content = " ".join(parts)
+    elif not isinstance(msg.content, str):
+        msg.content = str(msg.content)
+        
+    return msg
