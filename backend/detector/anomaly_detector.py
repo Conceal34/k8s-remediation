@@ -101,7 +101,7 @@ class AnomalyDetector:
         # Normalize: decision_function of -0.2 or below → score ≈ 1.0
         # Borderline anomaly (-0.02) → score ≈ 0.1  (won't clear THRESHOLD=0.65)
         # This eliminates low-confidence false positives from the contamination boundary.
-        normalized = float(np.clip(-df / 0.2, 0.0, 1.0))
+        normalized = float(np.clip(-df / 0.05, 0.0, 1.0))
 
         if normalized < THRESHOLD:
             return None
