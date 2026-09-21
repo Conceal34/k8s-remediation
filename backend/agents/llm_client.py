@@ -1,11 +1,11 @@
-# backend/agents/llm_client.py
 """
 LLM Client Factory & Gemini Multi-Key Rotator with Ultimate Fallback.
 Reads GEMINI_API_KEY / GEMINI_API_KEYS (supports multiple comma-separated keys).
 Automatically rotates to the next API key if a 429 / ResourceExhausted error occurs.
+Retries automatically on 503 / UNAVAILABLE errors with backoff.
 Falls back to gemini-3.6-flash as the ultimate fallback model if the primary model fails.
 """
-import os, yaml
+import os, yaml, time
 from langchain_core.language_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
@@ -57,40 +57,59 @@ def get_llm(model_override: str | None = None, key_override: str | None = None) 
         temperature=temp,
         google_api_key=key,
         convert_system_message_to_human=True,
-        max_retries=1,
+        max_retries=3,
     )
 
 
 def _try_invoke_model_across_keys(messages: list, target_model: str, temperature: float = 0.2):
-    """Attempts to invoke a specific model across all available API keys."""
+    """Attempts to invoke a specific model across all available API keys, with internal retry for 503s."""
     last_exc = None
 
     for attempt in range(len(API_KEYS)):
         current_key = get_active_key()
-        try:
-            llm = ChatGoogleGenerativeAI(
-                model=target_model,
-                temperature=temperature,
-                google_api_key=current_key,
-                convert_system_message_to_human=True,
-                max_retries=1,
-            )
-            return llm.invoke(messages)
-        except Exception as exc:
-            last_exc = exc
-            exc_str = str(exc).lower()
-            if "429" in exc_str or "quota" in exc_str or "resourceexhausted" in exc_str or "notfound" in exc_str or "404" in exc_str:
-                if len(API_KEYS) > 1 and attempt < len(API_KEYS) - 1:
-                    rotate_to_next_key()
+        
+        # We will try up to 3 times per key for transient server errors (503/500/502)
+        for retry in range(3):
+            try:
+                llm = ChatGoogleGenerativeAI(
+                    model=target_model,
+                    temperature=temperature,
+                    google_api_key=current_key,
+                    convert_system_message_to_human=True,
+                    max_retries=3,
+                )
+                return llm.invoke(messages)
+            except Exception as exc:
+                last_exc = exc
+                exc_str = str(exc).lower()
+                
+                # Transient Server Errors -> Wait and retry same key
+                if "503" in exc_str or "unavailable" in exc_str or "500" in exc_str or "502" in exc_str or "504" in exc_str:
+                    wait_time = 2 ** retry  # Exponential backoff: 1s, 2s, 4s...
+                    print(f"[Gemini Retry] ⏳ Transient API error (503/UNAVAILABLE). Retrying {retry+1}/3 in {wait_time}s...")
+                    time.sleep(wait_time)
                     continue
-            raise exc
+                
+                # Quota / Rate Limit / Not Found -> Rotate key if possible
+                if "429" in exc_str or "quota" in exc_str or "resourceexhausted" in exc_str or "notfound" in exc_str or "404" in exc_str:
+                    if len(API_KEYS) > 1 and attempt < len(API_KEYS) - 1:
+                        rotate_to_next_key()
+                        break # Break inner retry loop to try next key in outer loop
+                
+                # Fatal error (e.g. 400 Bad Request) -> Raise immediately
+                raise exc
+        else:
+            # If we exhausted all 3 retries for transient errors and still failed
+            if attempt >= len(API_KEYS) - 1:
+                raise last_exc
+            rotate_to_next_key()
 
     raise last_exc
 
 
 def invoke_gemini_with_rotation(messages: list, model: str | None = None, temperature: float = 0.2):
     """
-    Invokes Gemini with automatic multi-key rotation and ultimate fallback to gemini-3.6-flash.
+    Invokes Gemini with automatic multi-key rotation, 503 retry, and ultimate fallback to gemini-3.6-flash.
     1. First tries configured/requested model across all API keys.
     2. If that fails and target_model != ULTIMATE_FALLBACK_MODEL, tries ULTIMATE_FALLBACK_MODEL across all keys.
     """
