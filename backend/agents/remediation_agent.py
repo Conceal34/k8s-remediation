@@ -25,15 +25,8 @@ IMPORTANT: You MUST respond with ONLY a valid JSON object — no preamble, no ex
 Format:
 {{
   "action":        "<one of the allowed actions>",
-  "justification": "<why this action directly addresses the root cause>",
-  "confidence":    <float between 0.0 and 1.0>
+  "justification": "<why this action directly addresses the root cause>"
 }}
-
-Confidence guidance:
-- 0.9+  → very certain this action will fix the issue
-- 0.7–0.9 → reasonably confident
-- 0.5–0.7 → some uncertainty
-- < 0.5  → consider "escalate_no_op" instead
 
 If no safe action is apparent, choose "escalate_no_op".
 """
@@ -50,7 +43,6 @@ def _parse_proposal(raw: str) -> dict | None:
             return {
                 "action":        data["action"],
                 "justification": str(data.get("justification", "")),
-                "confidence":    float(data.get("confidence", 0.5)),
                 "risk_tier":     RISK_MAP.get(data["action"], "high"),
             }
     except Exception:

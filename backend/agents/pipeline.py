@@ -152,11 +152,12 @@ def loop_controller(state: PipelineState) -> PipelineState:
     if latest_verdict == "APPROVE":
         # Consensus reached
         p = state["proposals"][-1]
+        v = state["verdicts"][-1]
         return {
             **state,
             "consensus_reached": True,
             "final_action":      p["action"],
-            "confidence_score":  p["confidence"],
+            "confidence_score":  v.get("confidence", 0.0),
             "risk_tier":         p["risk_tier"],
         }
     elif state["round_num"] >= MAX_ROUNDS:

@@ -11,7 +11,7 @@ from cache import get_incident_cache, set_incident_cache
 
 SYSTEM_PROMPT = """\
 You are a Kubernetes infrastructure Critic Agent.
-Your role is to critically review a proposed remediation action.
+Your role is to critically review a proposed remediation action and calculate an objective confidence score.
 
 Evaluate whether the proposal:
 1. Directly addresses the stated root cause (not just symptoms).
@@ -21,7 +21,12 @@ Evaluate whether the proposal:
 IMPORTANT: Respond with ONLY a valid JSON object:
 {
   "verdict": "APPROVE" or "REVISE",
-  "reason":  "<specific explanation; if REVISE, state what is wrong and what to consider instead>"
+  "reason":  "<specific explanation; if REVISE, state what is wrong and what to consider instead>",
+  "rubric": {
+    "alignment": <float 0.0-1.0: Does it match the root cause?>,
+    "safety": <float 0.0-1.0: Does it avoid making things worse?>,
+    "feasibility": <float 0.0-1.0: Is it a sensible action for the environment?>
+  }
 }
 
 Guidance:
@@ -39,9 +44,17 @@ def _parse_verdict(raw: str) -> dict | None:
     try:
         data = json.loads(text.strip())
         if "verdict" in data and data["verdict"] in ("APPROVE", "REVISE"):
+            rubric = data.get("rubric", {})
+            alignment = float(rubric.get("alignment", 0.5))
+            safety = float(rubric.get("safety", 0.5))
+            feasibility = float(rubric.get("feasibility", 0.5))
+            # Option 1: Confidence is a weighted sum of the Critic's objective rubrics
+            confidence = (0.45 * alignment) + (0.35 * safety) + (0.20 * feasibility)
+            
             return {
                 "verdict": data["verdict"],
                 "reason":  str(data.get("reason", "")),
+                "confidence": round(confidence, 2)
             }
     except Exception:
         pass
@@ -77,7 +90,6 @@ Severity: {state['severity']}
 Proposed Remediation:
   Action:        {proposal['action']}
   Justification: {proposal['justification']}
-  Confidence:    {proposal['confidence']}
   Risk Tier:     {proposal.get('risk_tier', 'unknown')}
 
 Evaluate this proposal.

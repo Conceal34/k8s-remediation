@@ -151,8 +151,10 @@ class AnomalyDetector:
         db     = SessionLocal()
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         rows   = db.query(MetricSample).filter(MetricSample.timestamp >= cutoff).all()
-        if len(rows) < 20:
-            rows = db.query(MetricSample).order_by(MetricSample.timestamp.desc()).limit(1000).all()
+        # If the time window doesn't capture a healthy baseline (e.g. after a long pause),
+        # fallback to grabbing the most recent 10,000 samples to ensure we hit the seeded data.
+        if len(rows) < 4000:
+            rows = db.query(MetricSample).order_by(MetricSample.timestamp.desc()).limit(10000).all()
         db.close()
         return rows
 
