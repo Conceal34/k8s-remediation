@@ -5,6 +5,7 @@ import LiveDashboard from './views/LiveDashboard';
 import EscalationsView from './views/EscalationsView';
 import HistoryView from './views/HistoryView';
 import SettingsView from './views/SettingsView';
+import ChaosView from './views/ChaosView';
 import './index.css';
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
         {currentView === 'escalations' && <EscalationsView />}
         {currentView === 'history' && <HistoryView />}
         {currentView === 'settings' && <SettingsView />}
+        {currentView === 'chaos' && <ChaosView />}
       </main>
     </>
   );

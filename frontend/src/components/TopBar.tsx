@@ -4,6 +4,7 @@ const titles: Record<string, string[]> = {
   live: ["Live Dashboard", "Real-time cluster health & anomaly detection"],
   escalations: ["Escalation Queue", "Review pending decisions requiring operator approval"],
   history: ["Decision History", "Full audit trail of all anomaly responses"],
+  chaos: ["Demo Controls", "Trigger synthetic faults for autonomous remediation"],
   settings: ["Configuration", "Anomaly thresholds, policy rules & remediation whitelist"],
 };
 

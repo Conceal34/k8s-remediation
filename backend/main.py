@@ -12,7 +12,7 @@ load_dotenv()
 
 from database.session  import create_tables
 from agents.pipeline   import handle_anomaly
-from api import routes_metrics, routes_decisions, routes_approvals, routes_settings, routes_sse
+from api import routes_metrics, routes_decisions, routes_approvals, routes_settings, routes_sse, routes_chaos
 
 with open("config/config.yaml") as f:
     CFG = yaml.safe_load(f)
@@ -43,7 +43,7 @@ app.include_router(routes_decisions.router, prefix="/api/decisions",  tags=["Dec
 app.include_router(routes_approvals.router, prefix="/api/approvals",  tags=["Approvals"])
 app.include_router(routes_settings.router,  prefix="/api/settings",   tags=["Settings"])
 app.include_router(routes_sse.router,       prefix="/api/sse",        tags=["SSE"])
-
+app.include_router(routes_chaos.router,     prefix="/api/chaos",      tags=["Chaos Controls (Demo)"])
 
 @app.get("/api/health")
 def health():
