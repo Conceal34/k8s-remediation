@@ -2,21 +2,32 @@ import { useState } from 'react';
 
 const API_BASE = 'http://localhost:8000/api';
 
+const SERVICES = ['payment-service', 'order-service', 'auth-service'];
+const FAULTS = [
+  { id: 'cpu_spike', label: 'CPU Spike (High Load)' },
+  { id: 'memory_spike', label: 'Memory Leak (OOM Risk)' },
+  { id: 'crash_loop', label: 'Crash Loop (App Failing)' },
+];
+
 export default function ChaosView() {
   const [loading, setLoading] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
-  const inject = async (type: string, service: string) => {
-    setLoading(type);
+  const [selectedService, setSelectedService] = useState(SERVICES[0]);
+  const [selectedFault, setSelectedFault] = useState(FAULTS[0].id);
+
+  const inject = async () => {
+    setLoading('inject');
     setResult(null);
     try {
       const res = await fetch(`${API_BASE}/chaos/inject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fault_type: type, service })
+        body: JSON.stringify({ fault_type: selectedFault, service: selectedService })
       });
       if (res.ok) {
-        setResult(`✓ Injected ${type} into ${service}`);
+        const faultLabel = FAULTS.find(f => f.id === selectedFault)?.label;
+        setResult(`✓ Injected ${faultLabel} into ${selectedService}`);
       } else {
         setResult(`Failed: ${res.statusText}`);
       }
@@ -49,31 +60,40 @@ export default function ChaosView() {
         </p>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
-          <button 
-            className="btn btn-edit" 
-            style={{ width: '100%', justifyContent: 'center' }}
-            disabled={!!loading}
-            onClick={() => inject('cpu_spike', 'payment-service')}
-          >
-            {loading === 'cpu_spike' ? 'Injecting...' : 'Inject CPU Spike (Payment Service)'}
-          </button>
           
+          <div style={{ display: 'flex', gap: 'var(--sp-4)' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: 'var(--sp-2)', fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>Target Service</label>
+              <select 
+                className="filter-select" 
+                style={{ width: '100%', padding: 'var(--sp-2)' }}
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value)}
+              >
+                {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: 'var(--sp-2)', fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>Fault Type</label>
+              <select 
+                className="filter-select" 
+                style={{ width: '100%', padding: 'var(--sp-2)' }}
+                value={selectedFault}
+                onChange={(e) => setSelectedFault(e.target.value)}
+              >
+                {FAULTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+              </select>
+            </div>
+          </div>
+
           <button 
             className="btn btn-edit" 
-            style={{ width: '100%', justifyContent: 'center' }}
+            style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--sp-2)' }}
             disabled={!!loading}
-            onClick={() => inject('memory_spike', 'order-service')}
+            onClick={inject}
           >
-            {loading === 'memory_spike' ? 'Injecting...' : 'Inject Memory Leak (Order Service)'}
-          </button>
-          
-          <button 
-            className="btn btn-edit" 
-            style={{ width: '100%', justifyContent: 'center' }}
-            disabled={!!loading}
-            onClick={() => inject('crash_loop', 'auth-service')}
-          >
-            {loading === 'crash_loop' ? 'Injecting...' : 'Inject Crash Loop (Auth Service)'}
+            {loading === 'inject' ? 'Injecting...' : 'Inject Fault'}
           </button>
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--border-default)', margin: 'var(--sp-4) 0' }} />
