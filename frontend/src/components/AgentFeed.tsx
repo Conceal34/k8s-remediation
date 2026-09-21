@@ -172,6 +172,8 @@ export default function AgentFeed({ activeAnomaliesCount = 0 }: { activeAnomalie
 
             {/* ── Diagnosis ── */}
             {feed.stage === 'diagnosing' && !feed.diagnosis && <Spinner label="Diagnosis Agent thinking…" />}
+            {feed.stage === 'remediating' && <Spinner label="Remediation Agent formulating plan…" />}
+            {feed.stage === 'reviewing' && <Spinner label="Critic Agent evaluating proposal…" />}
             {feed.diagnosis && (
               <Block emoji="🧠" title="Diagnosis Agent — Gemini" accent="var(--accent-primary)">
                 {feed.diagnosis}

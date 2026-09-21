@@ -116,6 +116,7 @@ def remediation_node(state: PipelineState) -> PipelineState:
                     "service": state["service"], "proposal": proposal})
         return result
     except Exception as exc:
+        _broadcast({"type": "error", "anomaly_id": state["anomaly_id"], "service": state["service"], "message": f"RemediationAgent failed: {exc}"})
         return {**state, "pipeline_error": f"RemediationAgent failed: {exc}"}
 
 
@@ -135,6 +136,7 @@ def critic_node(state: PipelineState) -> PipelineState:
                     "service": state["service"], "verdict": verdict})
         return result
     except Exception as exc:
+        _broadcast({"type": "error", "anomaly_id": state["anomaly_id"], "service": state["service"], "message": f"CriticAgent failed: {exc}"})
         return {**state, "pipeline_error": f"CriticAgent failed: {exc}"}
 
 
