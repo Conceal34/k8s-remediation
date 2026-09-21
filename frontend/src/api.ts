@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
+export const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const api = axios.create({ baseURL: API_BASE })
 
 export const getEscalatedDecisions = () => api.get('/decisions/escalated')
 export const getDecisions          = (params?: { risk?: string; outcome?: string }) =>

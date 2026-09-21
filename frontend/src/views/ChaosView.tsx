@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { API_BASE } from '../api';
 
-const API_BASE = 'http://localhost:8000/api';
 
 const SERVICES = ['payment-service', 'order-service', 'auth-service'];
 const FAULTS = [

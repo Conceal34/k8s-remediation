@@ -1,3 +1,4 @@
+import { API_BASE } from '../api';
 import React, { useEffect, useState } from 'react';
 import { getDecisions } from '../api';
 
@@ -111,7 +112,7 @@ export default function PipelineVisual({ activeAnomaliesCount = 0 }: { activeAno
     const id = setInterval(fetchDecisions, 4000);
 
     // SSE subscription — advances stages in real time during in-flight runs
-    const es = new EventSource('/api/sse/pipeline-feed');
+    const es = new EventSource(`${API_BASE}/sse/pipeline-feed`);
     es.onerror = () => setLiveStage(null);
     es.onmessage = (ev) => {
       try {

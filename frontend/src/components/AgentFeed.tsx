@@ -1,3 +1,4 @@
+import { API_BASE } from '../api';
 import React, { useEffect, useRef, useState } from 'react';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ export default function AgentFeed({ activeAnomaliesCount = 0 }: { activeAnomalie
   }, [activeAnomaliesCount]);
 
   useEffect(() => {
-    const es = new EventSource('/api/sse/pipeline-feed');
+    const es = new EventSource(`${API_BASE}/sse/pipeline-feed`);
     esRef.current = es;
 
     es.onopen = () => setConnected(true);
