@@ -258,10 +258,15 @@ def cleanup():
     """Remove fault pods and clear active fault states."""
     clear_active_fault()
     for name in FAULT_POD_NAMES:
-        subprocess.run(
-            ["kubectl", "delete", "pod", name, "--ignore-not-found", "--grace-period=0"],
-            capture_output=True
-        )
+        try:
+            subprocess.run(
+                ["kubectl", "delete", "pod", name, "--ignore-not-found", "--grace-period=0"],
+                capture_output=True
+            )
+        except FileNotFoundError:
+            pass # kubectl not installed (simulated mode)
+        except Exception:
+            pass
     # Invalidate caches
     try:
         from cache import invalidate_metrics_cache, invalidate_decision_caches
