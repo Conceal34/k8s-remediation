@@ -182,7 +182,6 @@ export default function EscalationsView() {
                     <React.Fragment key={idx}>
                       <Block emoji="🛠️" title={`Remediation Agent — Round ${prop.round}`} accent="var(--color-info)">
                         Action: <strong style={{ color: 'var(--text-primary)' }}>{prop.action}</strong>
-                        {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round(prop.confidence * 100)}%</strong>
                         <br />
                         <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{prop.justification}</span>
                       </Block>
@@ -193,6 +192,11 @@ export default function EscalationsView() {
                           <strong style={{ color: verdict.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)' }}>
                             {verdict.verdict}
                           </strong>
+                          {verdict.confidence !== undefined && (
+                            <>
+                              {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round(verdict.confidence * 100)}%</strong>
+                            </>
+                          )}
                           <br />
                           <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{verdict.reason}</span>
                         </Block>

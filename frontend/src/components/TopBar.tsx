@@ -9,6 +9,7 @@ const titles: Record<string, string[]> = {
 
 export default function TopBar({ currentView }: { currentView: string }) {
   const [timeStr, setTimeStr] = useState('');
+  const [dateStr, setDateStr] = useState('');
 
   useEffect(() => {
     const updateClock = () => {
@@ -17,6 +18,12 @@ export default function TopBar({ currentView }: { currentView: string }) {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
+      }));
+      setDateStr(now.toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
       }));
     };
     updateClock();
@@ -40,7 +47,10 @@ export default function TopBar({ currentView }: { currentView: string }) {
             Operational
           </span>
         </div>
-        <div className="timestamp">{timeStr}</div>
+        <div className="timestamp">
+          <span className="timestamp-time">{timeStr}</span>
+          <span className="timestamp-date">{dateStr}</span>
+        </div>
       </div>
     </header>
   );

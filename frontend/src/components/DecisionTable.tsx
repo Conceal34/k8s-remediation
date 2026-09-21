@@ -17,7 +17,7 @@ const Block = ({ emoji, title, accent, children }: { emoji: string, title: strin
         {title}
       </strong>
     </div>
-    <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)', lineHeight: '1.55' }}>
+    <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)', lineHeight: '1.55', wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
       {children}
     </div>
   </div>
@@ -135,7 +135,6 @@ export default function DecisionTable({ decisions }: { decisions: any[] }) {
                             <React.Fragment key={idx}>
                               <Block emoji="🛠️" title={`Remediation Agent — Round ${prop.round}`} accent="var(--color-info)">
                                 Action: <strong style={{ color: 'var(--text-primary)' }}>{prop.action}</strong>
-                                {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round(prop.confidence * 100)}%</strong>
                                 <br />
                                 <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{prop.justification}</span>
                               </Block>
@@ -147,6 +146,11 @@ export default function DecisionTable({ decisions }: { decisions: any[] }) {
                                   <strong style={{ color: verdict.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)' }}>
                                     {verdict.verdict}
                                   </strong>
+                                  {verdict.confidence !== undefined && (
+                                    <>
+                                      {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round(verdict.confidence * 100)}%</strong>
+                                    </>
+                                  )}
                                   <br />
                                   <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{verdict.reason}</span>
                                 </Block>

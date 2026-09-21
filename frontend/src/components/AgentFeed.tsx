@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type PipelineEvent =
@@ -46,7 +46,7 @@ const Block = ({ emoji, title, accent = 'var(--border-subtle)', children }: {
         {title}
       </strong>
     </div>
-    <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)', lineHeight: '1.55' }}>
+    <div style={{ fontSize: '0.79rem', color: 'var(--text-muted)', lineHeight: '1.55', wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
       {children}
     </div>
   </div>
@@ -177,30 +177,35 @@ export default function AgentFeed({ activeAnomaliesCount = 0 }: { activeAnomalie
               </Block>
             )}
 
-            {/* ── Remediation proposals ── */}
-            {feed.stage === 'remediating' && feed.proposals.length === 0 && <Spinner label="Remediation Agent proposing fix…" />}
-            {feed.proposals.map((p, i) => (
-              <Block key={i} emoji="🛠️" title={`Remediation Agent — Round ${p.round}`} accent="var(--color-info)">
-                Action: <strong style={{ color: 'var(--text-primary)' }}>{p.action}</strong>
-                {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round(p.confidence * 100)}%</strong>
-                <br />
-                <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{p.justification}</span>
-              </Block>
-            ))}
-
-            {/* ── Critic verdicts ── */}
-            {feed.stage === 'reviewing' && feed.verdicts.length === 0 && <Spinner label="Critic Agent reviewing…" />}
-            {feed.verdicts.map((v, i) => (
-              <Block key={i} emoji="⚖️" title={`Critic Agent — Round ${v.round}`}
-                accent={v.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)'}>
-                Verdict:{' '}
-                <strong style={{ color: v.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                  {v.verdict}
-                </strong>
-                <br />
-                <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{v.reason}</span>
-              </Block>
-            ))}
+            {/* ── Remediation & Critic Rounds ── */}
+            {feed.proposals.map((p, idx) => {
+              const v = feed.verdicts.find(x => x.round === p.round);
+              return (
+                <React.Fragment key={idx}>
+                  <Block emoji="🛠️" title={`Remediation Agent — Round ${p.round}`} accent="var(--color-info)">
+                    Action: <strong style={{ color: 'var(--text-primary)' }}>{p.action}</strong>
+                    <br />
+                    <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{p.justification}</span>
+                  </Block>
+                  {v && (
+                    <Block emoji="⚖️" title={`Critic Agent — Round ${v.round}`}
+                      accent={v.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)'}>
+                      Verdict:{' '}
+                      <strong style={{ color: v.verdict === 'APPROVE' ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                        {v.verdict}
+                      </strong>
+                      {'confidence' in v && v.confidence !== undefined && (
+                        <>
+                          {' '}· Confidence: <strong style={{ color: 'var(--color-success)' }}>{Math.round((v as any).confidence * 100)}%</strong>
+                        </>
+                      )}
+                      <br />
+                      <span style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>{v.reason}</span>
+                    </Block>
+                  )}
+                </React.Fragment>
+              );
+            })}
 
             {/* ── Error ── */}
             {feed.error && (

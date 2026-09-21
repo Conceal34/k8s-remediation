@@ -1,11 +1,13 @@
 
-
 export default function Sidebar({ currentView, onViewChange }: { currentView: string, onViewChange: (view: string) => void }) {
   return (
     <aside className="sidebar" id="sidebar">
       <div className="sidebar-brand">
         <div className="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          {/* Cloud icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 0 1 0 9Z"/>
+          </svg>
         </div>
         <span className="brand-text">CloudOps</span>
       </div>
@@ -30,7 +32,7 @@ export default function Sidebar({ currentView, onViewChange }: { currentView: st
       <div className="sidebar-footer">
         <div className="cluster-status">
           <span className="status-dot online"></span>
-          <span className="status-text">minikube</span>
+          <span className="status-text">kind cluster</span>
         </div>
       </div>
     </aside>
