@@ -21,13 +21,31 @@ MAX_ROUNDS = CFG["agents"]["max_debate_rounds"]   # 2
 # Any number of frontend clients can subscribe; each gets their own queue.
 _sse_subscribers: list[asyncio.Queue] = []
 
-def _broadcast(event: dict):
-    """Push a JSON-serialisable event to every connected SSE client."""
-    for q in list(_sse_subscribers):
+_main_loop = None
+
+def get_main_loop():
+    global _main_loop
+    if _main_loop is None:
         try:
-            q.put_nowait(event)
-        except asyncio.QueueFull:
+            _main_loop = asyncio.get_running_loop()
+        except RuntimeError:
             pass
+    return _main_loop
+
+def _do_broadcast(q, event):
+    try:
+        q.put_nowait(event)
+    except asyncio.QueueFull:
+        pass
+
+def _broadcast(event: dict):
+    """Push a JSON-serialisable event to every connected SSE client thread-safely."""
+    loop = get_main_loop()
+    for q in list(_sse_subscribers):
+        if loop and hasattr(loop, 'call_soon_threadsafe'):
+            loop.call_soon_threadsafe(_do_broadcast, q, event)
+        else:
+            _do_broadcast(q, event)
 
 def sse_subscribe() -> asyncio.Queue:
     q: asyncio.Queue = asyncio.Queue(maxsize=100)
@@ -222,6 +240,8 @@ compiled_pipeline = build_pipeline()
 
 
 async def handle_anomaly(anomaly, context: list) -> dict:
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
     from database.session import SessionLocal
     from database.models import Anomaly
     from sqlalchemy.orm import joinedload
