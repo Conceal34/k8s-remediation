@@ -98,10 +98,12 @@ class AnomalyDetector:
         if df >= 0:
             return None
 
-        # Since df < 0 guarantees it falls in the top 5% of outliers (contamination=0.05),
-        # we treat ANY negative df as a valid anomaly.
-        # Map df to a confidence score between 0.70 and 1.0
-        normalized = min(1.0, 0.70 + abs(df) * 5.0)
+        # Re-introduce the False-Positive threshold, but with a calibrated scaling factor (0.02)
+        # This properly separates massive spikes (CPU=96) from the 5% contamination noise.
+        normalized = float(np.clip(-df / 0.02, 0.0, 1.0))
+
+        if normalized < 0.65:
+            return None
 
         severity = self._assign_severity(normalized)
         return normalized, severity
