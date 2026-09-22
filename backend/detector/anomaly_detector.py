@@ -80,13 +80,15 @@ class AnomalyDetector:
         if idx is not None:
             vec[idx] = float(sample.value)
 
-        # 1. Deterministic Rule-Based Checks
-        # Handles discrete metrics and massive continuous spikes that exceed shallow ML tree boundaries
+        # 1. Deterministic Rule-Based Checks (the only reliable method for a small local dataset)
+        # The ML model's decision_function scores are dataset-size-dependent; on small local DBs
+        # normal values like CPU=22.0 can produce df=-0.013 which maps above threshold incorrectly.
+        # Deterministic rules are the correct approach for well-understood thresholds.
         cpu = vec[0]
         memory = vec[1]
         restarts = vec[2]
         error_rate = vec[3]
-        
+
         if cpu > 75.0:
             return 0.98, "high"
         if memory > 75.0:
@@ -96,22 +98,18 @@ class AnomalyDetector:
         if error_rate > 0.10:
             return 0.90, "high"
 
-        # 2. AI-Driven Check (for subtle continuous metric anomalies)
+        # 2. AI-Driven Check — only fires for extreme ML outliers with very high confidence
+        # We use a strict threshold (df < -0.15) to only catch genuine multi-dimensional anomalies
+        # that the rules above don't cover (e.g. simultaneously high CPU + high memory + errors).
         X = np.array([vec])
-
-        # decision_function > 0  → normal (return immediately)
-        # decision_function < 0  → anomaly candidate (magnitude = severity)
         df = float(self.model.decision_function(X)[0])
-        if df >= 0:
+
+        # Only flag if the ML model is VERY confident this is an outlier (df < -0.15)
+        # This prevents normal 5% contamination noise from generating false alarms.
+        if df >= -0.15:
             return None
 
-        # Re-introduce the False-Positive threshold, but with a calibrated scaling factor (0.02)
-        # This properly separates massive spikes (CPU=96) from the 5% contamination noise.
-        normalized = float(np.clip(-df / 0.02, 0.0, 1.0))
-
-        if normalized < 0.65:
-            return None
-
+        normalized = float(np.clip(-df / 0.20, 0.0, 1.0))
         severity = self._assign_severity(normalized)
         return normalized, severity
 
