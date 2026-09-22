@@ -106,6 +106,6 @@ Evaluate this proposal.
         raise ValueError(f"Failed to parse LLM response into valid verdict JSON: {response.content}")
 
     # 3. Store in Redis for future recurring incidents
-    set_incident_cache(service, cache_key_metric, "critic", verdict, ttl=3600)
+    set_incident_cache(service, cache_key_metric, "critic", verdict, ttl=86400)
 
     return verdict

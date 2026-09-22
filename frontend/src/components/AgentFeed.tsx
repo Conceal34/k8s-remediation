@@ -66,15 +66,49 @@ export default function AgentFeed({ activeAnomaliesCount = 0 }: { activeAnomalie
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
+  // Fallback: if feed is still empty 5s after SSE connects, poll /decisions/ to rebuild it from DB.
+  // This ensures the feed always shows the last known state even if SSE events were missed.
   useEffect(() => {
-    if (activeAnomaliesCount === 0) {
-      const t = setTimeout(() => {
-        setFeed(EMPTY);
-        setCleared(null);
-      }, 30000);
-      return () => clearTimeout(t);
-    }
-  }, [activeAnomaliesCount]);
+    if (!connected || feed.anomaly) return; // SSE working fine or already populated
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/decisions/`);
+        const data = await res.json();
+        if (!data || !data[0]) return;
+        const d = data[0]; // Most recent decision
+        const anomalyData = d.anomaly;
+        if (!anomalyData) return;
+        // Rebuild feed from DB data
+        setFeed({
+          anomaly: {
+            type: 'anomaly_detected',
+            anomaly_id: anomalyData.id,
+            service: d.service,
+            severity: anomalyData.severity,
+            score: anomalyData.score,
+            detected_at: anomalyData.detected_at,
+          },
+          diagnosis: d.diagnosis_text || null,
+          proposals: (d.remediation_proposals || []).map((p: any) => ({ ...p })),
+          verdicts: (d.critic_verdicts || []).map((v: any) => ({ ...v })),
+          outcome: d.autonomy_outcome ? {
+            type: 'outcome',
+            anomaly_id: anomalyData.id,
+            service: d.service,
+            outcome: d.autonomy_outcome,
+            action: d.final_action,
+            confidence: d.confidence_score,
+          } : null,
+          error: d.pipeline_error || null,
+          stage: 'done',
+        });
+        console.log('[Feed] Rebuilt from DB fallback — decision ID:', d.id);
+      } catch (e) {
+        console.warn('[Feed] DB fallback fetch failed:', e);
+      }
+    }, 5000); // Wait 5s for SSE to deliver events first
+    return () => clearTimeout(timer);
+  }, [connected, feed.anomaly]);
 
   useEffect(() => {
     const es = new EventSource(`${API_BASE}/sse/pipeline-feed`);

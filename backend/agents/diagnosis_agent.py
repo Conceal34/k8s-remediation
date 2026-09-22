@@ -63,6 +63,6 @@ Based on this data, provide your root-cause diagnosis.
 
     # 3. Store in Redis for future recurring incidents
     if diagnosis_text:
-        set_incident_cache(service, cache_key_metric, "diagnosis", diagnosis_text, ttl=3600)
+        set_incident_cache(service, cache_key_metric, "diagnosis", diagnosis_text, ttl=86400)
 
     return diagnosis_text

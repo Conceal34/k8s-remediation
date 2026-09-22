@@ -21,6 +21,10 @@ MAX_ROUNDS = CFG["agents"]["max_debate_rounds"]   # 2
 # Any number of frontend clients can subscribe; each gets their own queue.
 _sse_subscribers: list[asyncio.Queue] = []
 
+# Stores every event from the most recent pipeline run.
+# New SSE connections immediately receive a replay of this so they never miss a run.
+_last_run_events: list[dict] = []
+
 _main_loop = None
 
 def get_main_loop():
@@ -39,7 +43,9 @@ def _do_broadcast(q, event):
         pass
 
 def _broadcast(event: dict):
-    """Push a JSON-serialisable event to every connected SSE client thread-safely."""
+    """Push a JSON-serialisable event to every connected SSE client thread-safely, and save to replay buffer."""
+    global _last_run_events
+    _last_run_events.append(event)
     loop = get_main_loop()
     for q in list(_sse_subscribers):
         if loop and hasattr(loop, 'call_soon_threadsafe'):
@@ -48,8 +54,14 @@ def _broadcast(event: dict):
             _do_broadcast(q, event)
 
 def sse_subscribe() -> asyncio.Queue:
-    q: asyncio.Queue = asyncio.Queue(maxsize=100)
+    q: asyncio.Queue = asyncio.Queue(maxsize=200)
     _sse_subscribers.append(q)
+    # Immediately replay the last pipeline run so the new client sees the full history
+    for event in _last_run_events:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
     return q
 
 def sse_unsubscribe(q: asyncio.Queue):
@@ -240,8 +252,9 @@ compiled_pipeline = build_pipeline()
 
 
 async def handle_anomaly(anomaly, context: list) -> dict:
-    global _main_loop
+    global _main_loop, _last_run_events
     _main_loop = asyncio.get_running_loop()
+    _last_run_events = []   # Clear replay buffer for this fresh run
     from database.session import SessionLocal
     from database.models import Anomaly
     from sqlalchemy.orm import joinedload

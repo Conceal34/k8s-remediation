@@ -97,6 +97,6 @@ Propose your remediation action now.
 
     # 3. Store in Redis for future recurring incidents
     if round_num == 1:
-        set_incident_cache(service, cache_key_metric, "remediation", proposal, ttl=3600)
+        set_incident_cache(service, cache_key_metric, "remediation", proposal, ttl=86400)
 
     return proposal
