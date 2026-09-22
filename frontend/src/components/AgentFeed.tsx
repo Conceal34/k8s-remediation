@@ -90,6 +90,8 @@ export default function AgentFeed({ activeAnomaliesCount = 0 }: { activeAnomalie
       } catch (err) {
         return;
       }
+      
+      console.log('[SSE Event Received]:', event.type, event);
 
       if (event.type === 'connected') { setConnected(true); setFeed(EMPTY); return; }
 
