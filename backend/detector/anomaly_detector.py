@@ -68,12 +68,15 @@ class AnomalyDetector:
 
         # Build feature vector for this service
         vec = [0.0, 0.0, 0.0, 0.0]
-        # First, populate from historical context
+        # First, populate from historical context (sorted newest-first)
+        # Only take the first (newest) value for each metric type to avoid older ticks overwriting new ones
+        seen = set()
         for s in context:
             if s.service == sample.service:
                 idx = METRIC_IDX.get(s.metric_type)
-                if idx is not None:
+                if idx is not None and idx not in seen:
                     vec[idx] = float(s.value)
+                    seen.add(idx)
                     
         # Then OVERRIDE with the actual live incoming sample!
         idx = METRIC_IDX.get(sample.metric_type)
