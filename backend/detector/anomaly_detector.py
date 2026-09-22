@@ -98,13 +98,10 @@ class AnomalyDetector:
         if df >= 0:
             return None
 
-        # Normalize: decision_function of -0.2 or below → score ≈ 1.0
-        # Borderline anomaly (-0.02) → score ≈ 0.1  (won't clear THRESHOLD=0.65)
-        # This eliminates low-confidence false positives from the contamination boundary.
-        normalized = float(np.clip(-df / 0.05, 0.0, 1.0))
-
-        if normalized < THRESHOLD:
-            return None
+        # Since df < 0 guarantees it falls in the top 5% of outliers (contamination=0.05),
+        # we treat ANY negative df as a valid anomaly.
+        # Map df to a confidence score between 0.70 and 1.0
+        normalized = min(1.0, 0.70 + abs(df) * 5.0)
 
         severity = self._assign_severity(normalized)
         return normalized, severity
