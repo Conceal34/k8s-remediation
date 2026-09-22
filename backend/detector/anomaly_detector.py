@@ -80,16 +80,23 @@ class AnomalyDetector:
         if idx is not None:
             vec[idx] = float(sample.value)
 
-        # 1. Deterministic Rule-Based Checks (for discrete/constant baseline metrics)
-        # Isolation forests ignore features that are perfectly constant (0.0) in training data.
+        # 1. Deterministic Rule-Based Checks
+        # Handles discrete metrics and massive continuous spikes that exceed shallow ML tree boundaries
+        cpu = vec[0]
+        memory = vec[1]
         restarts = vec[2]
         error_rate = vec[3]
+        
+        if cpu > 75.0:
+            return 0.98, "high"
+        if memory > 75.0:
+            return 0.98, "high"
         if restarts > 3:
             return 0.95, "high"
         if error_rate > 0.10:
             return 0.90, "high"
 
-        # 2. AI-Driven Check (for continuous metrics like CPU/Memory)
+        # 2. AI-Driven Check (for subtle continuous metric anomalies)
         X = np.array([vec])
 
         # decision_function > 0  → normal (return immediately)
