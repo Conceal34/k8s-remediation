@@ -237,8 +237,8 @@ async def collection_loop(anomaly_callback=None):
                         except Exception:
                             pass
 
-                        score, severity = result
-                        anomaly = ad.persist_anomaly(sample, score, severity)
+                        score, severity, trigger_metric = result
+                        anomaly = ad.persist_anomaly(sample, score, severity, trigger_metric)
                         if anomaly_callback:
                             # Bug 1/3 Fix: wrap the task so a mid-run crash (e.g. 429)
                             # clears the cooldown lock — preventing the "stuck on detector" state.

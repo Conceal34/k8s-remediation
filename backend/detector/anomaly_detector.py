@@ -83,38 +83,39 @@ class AnomalyDetector:
         if idx is not None:
             vec[idx] = float(sample.value)
 
-        # 1. Deterministic Rule-Based Checks (the only reliable method for a small local dataset)
-        # The ML model's decision_function scores are dataset-size-dependent; on small local DBs
-        # normal values like CPU=22.0 can produce df=-0.013 which maps above threshold incorrectly.
-        # Deterministic rules are the correct approach for well-understood thresholds.
+        # 1. Deterministic Rule-Based Checks
         cpu = vec[0]
         memory = vec[1]
         restarts = vec[2]
         error_rate = vec[3]
 
         if cpu > 75.0:
-            return 0.98, "high"
+            return 0.98, "high", "cpu"
         if memory > 75.0:
-            return 0.98, "high"
+            return 0.98, "high", "memory"
         if restarts > 3:
-            return 0.95, "high"
+            return 0.95, "high", "restarts"
         if error_rate > 0.10:
-            return 0.90, "high"
+            return 0.90, "high", "error_rate"
 
-        # 2. AI-Driven Check — only fires for extreme ML outliers with very high confidence
-        # We use a strict threshold (df < -0.15) to only catch genuine multi-dimensional anomalies
-        # that the rules above don't cover (e.g. simultaneously high CPU + high memory + errors).
+        # 2. AI-Driven Check — only fires for extreme ML outliers
         X = np.array([vec])
         df = float(self.model.decision_function(X)[0])
 
-        # Only flag if the ML model is VERY confident this is an outlier (df < -0.15)
-        # This prevents normal 5% contamination noise from generating false alarms.
         if df >= -0.15:
             return None
 
         normalized = float(np.clip(-df / 0.20, 0.0, 1.0))
         severity = self._assign_severity(normalized)
-        return normalized, severity
+        
+        # Determine primary contributor for ML anomalies
+        trigger_metric = "composite"
+        if cpu > 40: trigger_metric = "cpu"
+        elif memory > 50: trigger_metric = "memory"
+        elif restarts > 0: trigger_metric = "restarts"
+        elif error_rate > 0.02: trigger_metric = "error_rate"
+            
+        return normalized, severity, trigger_metric
 
     def _assign_severity(self, score: float) -> str:
         """FR-2.3: Map score to low / medium / high severity band."""
@@ -125,12 +126,26 @@ class AnomalyDetector:
         return "high"
 
     # ── Persistence ───────────────────────────────────────────────────────────
-    def persist_anomaly(self, sample: MetricSample, score: float, severity: str) -> Anomaly:
-        """Write Anomaly row + audit log entry to DB."""
+    def persist_anomaly(self, sample: MetricSample, score: float, severity: str, trigger_metric: str) -> Anomaly:
+        """Write Anomaly row + audit log entry to DB. Uses correct trigger_metric."""
         db = SessionLocal()
         try:
+            # If the trigger metric is different from the 'trigger sample' passed in (usually cpu),
+            # try to find the actual sample row from the same timestamp bucket
+            target_sample_id = sample.id
+            if trigger_metric != sample.metric_type and trigger_metric != "composite":
+                # Find the sample for this service with the trigger metric from the same time
+                ts = sample.timestamp
+                actual_sample = db.query(MetricSample).filter(
+                    MetricSample.service == sample.service,
+                    MetricSample.metric_type == trigger_metric,
+                    MetricSample.timestamp == ts
+                ).first()
+                if actual_sample:
+                    target_sample_id = actual_sample.id
+
             anomaly = Anomaly(
-                metric_sample_id=sample.id,
+                metric_sample_id=target_sample_id,
                 score=round(score, 6),
                 severity=severity,
                 detected_at=datetime.now(timezone.utc),
@@ -142,13 +157,13 @@ class AnomalyDetector:
                 ref_type="anomaly",
                 ref_id=anomaly.id,
                 event="anomaly_detected",
-                detail={"score": round(score, 4), "severity": severity, "service": sample.service},
+                detail={"score": round(score, 4), "severity": severity, "service": sample.service, "metric": trigger_metric},
                 timestamp=datetime.now(timezone.utc),
             )
             db.add(audit)
             db.commit()
             db.refresh(anomaly)
-            print(f"[AnomalyDetector] ⚠️  ANOMALY: service={sample.service} score={score:.3f} severity={severity}")
+            print(f"[AnomalyDetector] ⚠️  ANOMALY: service={sample.service} metric={trigger_metric} score={score:.3f} severity={severity}")
             return anomaly
         finally:
             db.close()
