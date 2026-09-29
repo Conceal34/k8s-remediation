@@ -8,7 +8,6 @@
 ![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
