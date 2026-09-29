@@ -368,12 +368,6 @@ If you change agent prompts or logic and want fresh reasoning, run `make flush-c
 
 ---
 
-## License
-
-Released under the **MIT License**.
-
----
-
 ## Author
 
 **Vinner Hooda** · [GitHub](https://github.com/Conceal34) · [Portfolio](https://vinner-portfolio.netlify.app)
